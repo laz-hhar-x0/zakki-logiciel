@@ -1098,8 +1098,8 @@ const css = `
 }
 .timer-panel {
   width: 100%;
-  min-height: 92px;
-  max-height: 92px;
+min-height: 180px;
+max-height: 220px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1649,7 +1649,7 @@ const css = `
     width: 100%;            
     max-width: 100%;        
     min-width: 100%;
-    min-height: 520px;      /* 🔴 هنا السر: طول كبير بزاف باش ياخذ راحتو */
+    min-height: 420px;      /* 🔴 هنا السر: طول كبير بزاف باش ياخذ راحتو */
     padding: 24px 16px 24px; /* 🔴 حينا الـ 150px، وخليا مسافات عادية */
     justify-content: space-between; /* يوزع العنوان، الكرسي، والأزرار بالتساوي */
   }
