@@ -66,6 +66,7 @@ function Station({ id, data, now, onEndOpen }) {
   const running = data?.status === "running";
   const isOpen = running && !data.endsAt;
   const last = data?.last;
+const [showTimerPanel, setShowTimerPanel] = useState(false);
 
   const startTimer = async () => {
     const d = parseInt(mins, 10);
@@ -111,7 +112,7 @@ function Station({ id, data, now, onEndOpen }) {
               {isOpen ? hms((now - data.startAt) / 1000) : hms((data.endsAt - now) / 1000)}
             </div>
           </>
-        ) : last ? (
+           ) : last ? (
           <div className="recap">
             <div className="price">{last.price} دج</div>
             <div className="two">
@@ -119,43 +120,60 @@ function Station({ id, data, now, onEndOpen }) {
               <button className="b-forget" onClick={forget}>تأجيل</button>
             </div>
           </div>
-        ) : null}
-      </div>
-
-      <div className="ctl">
-        {!running && (
-          <div className="combo">
-            <input
-              type="number" min="1" inputMode="numeric" value={mins}
-              onChange={(e) => setMins(e.target.value)}
-              placeholder="شحال دقيقة؟"
-            />
-            <button className="arrow" onClick={() => setMenu(!menu)} aria-label="اختار المدة">▾</button>
-            {menu && (
-              <ul className="menu">
-                {PRESETS.map((p) => (
-                  <li key={p.m}>
-                    <button onClick={() => { setMins(String(p.m)); setMenu(false); }}>{p.label}</button>
-                  </li>
-                ))}
-              </ul>
-            )}
+        ) : (
+          <div className="empty-seat">
+            <span className="seat-icon">♙</span>
+            <span>الكرسي فارغ</span>
           </div>
         )}
+      </div>
 
-        <div className="btns">
-          {!running && (
-            <>
-              <button className="b-start" onClick={startTimer}>بدء المؤقت</button>
-              <button className="b-open" onClick={startOpen}>فتح وقت</button>
-            </>
-          )}
-          {running && (
+      <div className={`ctl ${!running ? "has-timer-drawer" : ""}`}>
+        {!running ? (
+          <>
+            <button
+              type="button"
+              className={`timer-toggle ${showTimerPanel ? "is-open" : ""}`}
+              onClick={() => setShowTimerPanel((prev) => !prev)}
+              aria-label={showTimerPanel ? "إخفاء خيارات المؤقت" : "إظهار خيارات المؤقت"}
+              aria-expanded={showTimerPanel}
+            >
+              {showTimerPanel ? "❯" : "❮"}
+            </button>
+
+            <div className={`timer-panel ${showTimerPanel ? "is-open" : ""}`} aria-hidden={!showTimerPanel}>
+              <div className="combo">
+                <input
+                  type="number" min="1" inputMode="numeric" value={mins}
+                  onChange={(e) => setMins(e.target.value)}
+                  placeholder="شحال دقيقة؟"
+                  tabIndex={showTimerPanel ? 0 : -1}
+                />
+                <button className="arrow" onClick={() => setMenu(!menu)} aria-label="اختار المدة" tabIndex={showTimerPanel ? 0 : -1}>▾</button>
+                {menu && showTimerPanel && (
+                  <ul className="menu">
+                    {PRESETS.map((p) => (
+                      <li key={p.m}>
+                        <button onClick={() => { setMins(String(p.m)); setMenu(false); }}>{p.label}</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="btns">
+                <button className="b-start" onClick={startTimer} tabIndex={showTimerPanel ? 0 : -1}>بدء المؤقت</button>
+                <button className="b-open" onClick={startOpen} tabIndex={showTimerPanel ? 0 : -1}>فتح وقت</button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="btns">
             <button className="b-end" onClick={() => (isOpen ? onEndOpen(id) : safeFinish(id, data))}>
               إنهاء المؤقت
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -1048,6 +1066,69 @@ const css = `
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+/* سهم جانبي ثابت، واللوحة تبقى موجودة وتتحرك من جهته */
+.ctl.has-timer-drawer {
+  min-height: 34px;
+  justify-content: center;
+}
+.timer-toggle {
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 30px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-2);
+  border-radius: 0 7px 7px 0;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: color .18s, background .18s, border-color .18s;
+}
+.timer-toggle:hover,
+.timer-toggle.is-open {
+  color: var(--accent);
+  background: var(--surface);
+  border-color: var(--accent);
+}
+.timer-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(42px);
+  transition:
+    max-height .32s ease,
+    opacity .24s ease,
+    transform .32s cubic-bezier(.2,.75,.25,1),
+    visibility 0s linear .32s;
+}
+.timer-panel.is-open {
+  max-height: 130px;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition:
+    max-height .32s ease,
+    opacity .24s ease,
+    transform .32s cubic-bezier(.2,.75,.25,1),
+    visibility 0s;
 }
 
 .combo {
