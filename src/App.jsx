@@ -66,7 +66,7 @@ function Station({ id, data, now, onEndOpen }) {
   const running = data?.status === "running";
   const isOpen = running && !data.endsAt;
   const last = data?.last;
-const [showTimerPanel, setShowTimerPanel] = useState(false);
+  const [showTimerPanel, setShowTimerPanel] = useState(false);
 
   const startTimer = async () => {
     const d = parseInt(mins, 10);
@@ -682,8 +682,8 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const busy = useRef(new Set());
 
-  const [notice, setNotice] = useState(null);   // تنبيه الوقت المفتوح
-  const [endId, setEndId] = useState(null);     // المحطة اللي نهيوها
+  const [notice, setNotice] = useState(null);
+  const [endId, setEndId] = useState(null);
   const [realMin, setRealMin] = useState("");
   const noticed = useRef(false);
 
@@ -711,7 +711,6 @@ export default function App() {
     });
   }, [now, stations]);
 
-  // كي يتحل الموقع: شوف واش كاين وقت مفتوح
   useEffect(() => {
     if (noticed.current || Object.keys(stations).length === 0) return;
     noticed.current = true;
@@ -892,12 +891,11 @@ const css = `
   overflow-x: hidden;
 }
 
-/* الخلفية اللي كتدور */
 .app::before {
-  --orbit: 50px;               /* نصف قطر الدائرة */
+  --orbit: 50px;
   content: "";
   position: fixed;
-  inset: calc(var(--orbit) * -1.5);   /* زيادة باش ما تبانوش الحواف */
+  inset: calc(var(--orbit) * -1.5);
   z-index: -1;
   background: url("/1.webp") center / cover no-repeat;
   animation: orbitBg 12s linear infinite;
@@ -905,7 +903,6 @@ const css = `
   will-change: transform;
 }
 
-/* الصورة كتبقى مستقيمة وكتزح فمسار دائري: يمين ← فوق ← يسار ← تحت */
 @keyframes orbitBg {
   from { transform: rotate(0deg)   translateX(var(--orbit)) rotate(0deg); }
   to   { transform: rotate(360deg) translateX(var(--orbit)) rotate(-360deg); }
@@ -988,7 +985,6 @@ const css = `
 .box.open { border-color: var(--accent); }
 .box:hover { filter: brightness(1.04); }
 
-/* دوران 360° مرة وحدة كي يبدا المؤقت ولا فتح وقت */
 .box.on,
 .box.open {
   animation: spinOnce 1.2s cubic-bezier(.4, 0, .2, 1);
@@ -1069,7 +1065,6 @@ const css = `
   gap: 10px;
 }
 
-/* السهم على جهة اللوحة، ومساحة لوحة المؤقت تبقى محجوزة حتى وهي مخفية */
 .ctl.has-timer-drawer {
   min-height: 118px;
   justify-content: flex-start;
@@ -1456,7 +1451,6 @@ const css = `
   font-size: 0.85rem;
 }
 
-/* القاعدة العامة (تصلحها وتمسح منها outline-offset) */
 .app button:focus-visible,
 .app input:focus-visible,
 .app select:focus-visible {
@@ -1635,7 +1629,7 @@ const css = `
 /* الشاشات الصغيرة (موبايل) */
 @media (max-width: 760px) {
   .app {
-    padding: 14px;
+    padding: 12px;
     font-size: 13px;
   }
   .top {
@@ -1646,16 +1640,35 @@ const css = `
   }
   .top h1 { font-size: 1.5rem; }
   .nav { padding: 7px 10px; font-size: 0.75rem; }
-  .grid { gap: 10px; }
-  .box {
-    width: calc(50% - 10px);
-    min-width: 200px;
-    min-height: 320px;
-    padding: 42px 16px 18px;
+  
+  .grid { 
+    gap: 16px; /* زيادة الفراغ بين المربعات */
   }
-  .box h2 { font-size: 3.4rem; }
+
+  /* 🔴 التعديل هنا: المربع ياخذ العرض الكامل + زيادة الطول */
+  .box {
+    width: 100%;            
+    max-width: 100%;        
+    min-width: 100%;
+    min-height: 360px;      /* زدنا الطول باش المحتوى يرتاح */
+    padding: 30px 16px 90px;
+  }
+
+  .box h2 { font-size: 3.2rem; } 
   .label { font-size: 1.1rem; }
-  .combo, .btns, .two { max-width: 100%; }
+  .big { font-size: 2.2rem; }    
+
+  /* باش نضمنو المحتوى ما يخرجش لبرا */
+  .combo, .btns, .two { 
+    max-width: 100%; 
+  }
+
+  /* خلي الأزرار تحت بعضاهم في الشاشات الصغيرة بزاف */
+  .btns { 
+    flex-direction: column; 
+    gap: 8px;
+  }
+  
   .row { grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; }
   .row > * { min-width: 0; }
   .row span { overflow-wrap: anywhere; }
@@ -1664,13 +1677,16 @@ const css = `
 @media (max-width: 390px) {
   .top { grid-template-columns: 70px 1fr; }
   .top > span { display: none; }
-  .btns { flex-direction: column; }
-  .big { font-size: 2rem; }
+  .big { font-size: 1.8rem; }
+  
   .box {
     width: 100%;
     min-width: 100%;
+    min-height: 300px; /* طول مناسب */
+    padding: 24px 14px 20px;
   }
-  .box h2 { font-size: 3rem; }
+  
+  .box h2 { font-size: 2.8rem; }
   .label { font-size: 1rem; }
 }
 
@@ -1679,30 +1695,30 @@ const css = `
   .top, .grid { max-width: 1800px; }
   .box {
     width: calc(33.333% - 16px);
-    max-width: 400px;          /* كانت 460px */
-    min-height: 300px;         /* كانت 420px */
-    padding: 36px 22px 24px;   /* كانت 56px 28px 28px */
+    max-width: 400px;
+    min-height: 300px;
+    padding: 36px 22px 24px;
   }
-  .box h2 { font-size: 4.4rem; }   /* كانت 5.2rem */
-  .label { font-size: 1.5rem; }    /* كانت 1.7rem */
-  .big { font-size: 2.9rem; }      /* كانت 3.4rem */
-  .price { font-size: 2.3rem; }    /* كانت 2.6rem */
-  .combo, .btns, .two { max-width: 310px; }   /* كانت 340px */
+  .box h2 { font-size: 4.4rem; }
+  .label { font-size: 1.5rem; }
+  .big { font-size: 2.9rem; }
+  .price { font-size: 2.3rem; }
+  .combo, .btns, .two { max-width: 310px; }
   .btns button, .two button { font-size: 0.9rem; padding: 11px 10px; }
 }
 
 @media (min-width: 1900px) {
   .top, .grid { max-width: 2200px; }
   .box {
-    max-width: 480px;          /* كانت 580px */
-    min-height: 340px;         /* كانت 520px */
-    padding: 40px 28px 28px;   /* كانت 64px 36px 36px */
+    max-width: 480px;
+    min-height: 340px;
+    padding: 40px 28px 28px;
   }
-  .box h2 { font-size: 5rem; }     /* كانت 6.4rem */
-  .label { font-size: 1.7rem; }    /* كانت 2rem */
-  .big { font-size: 3.4rem; }      /* كانت 4.2rem */
-  .price { font-size: 2.7rem; }    /* كانت 3.2rem */
-  .combo, .btns, .two { max-width: 360px; }   /* كانت 420px */
+  .box h2 { font-size: 5rem; }
+  .label { font-size: 1.7rem; }
+  .big { font-size: 3.4rem; }
+  .price { font-size: 2.7rem; }
+  .combo, .btns, .two { max-width: 360px; }
   .btns button, .two button { font-size: 0.95rem; padding: 12px 10px; }
   .combo input { font-size: 0.95rem; }
 }
