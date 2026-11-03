@@ -139,6 +139,7 @@ const [showTimerPanel, setShowTimerPanel] = useState(false);
               aria-expanded={showTimerPanel}
             >
               {showTimerPanel ? "❯" : "❮"}
+
             </button>
 
             <div className={`timer-panel ${showTimerPanel ? "is-open" : ""}`} aria-hidden={!showTimerPanel}>
@@ -1068,64 +1069,62 @@ const css = `
   gap: 10px;
 }
 
-/* سهم جانبي ثابت، واللوحة تبقى موجودة وتتحرك من جهته */
+/* السهم على جهة اللوحة، ومساحة لوحة المؤقت تبقى محجوزة حتى وهي مخفية */
 .ctl.has-timer-drawer {
-  min-height: 34px;
-  justify-content: center;
+  min-height: 118px;
+  justify-content: flex-start;
+  gap: 4px;
 }
 .timer-toggle {
-  position: absolute;
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
+  position: relative;
+  align-self: flex-end;
   z-index: 3;
-  width: 30px;
-  height: 42px;
+  width: auto;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  border: 1px solid var(--border-2);
-  border-radius: 0 7px 7px 0;
-  background: var(--surface-2);
+  padding: 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-dim);
   font: inherit;
   font-size: 1rem;
+  line-height: 1;
   cursor: pointer;
-  transition: color .18s, background .18s, border-color .18s;
+  transition: color .18s;
 }
 .timer-toggle:hover,
 .timer-toggle.is-open {
   color: var(--accent);
-  background: var(--surface);
-  border-color: var(--accent);
+  background: transparent;
+  border: 0;
 }
 .timer-panel {
   width: 100%;
+  min-height: 92px;
+  max-height: 92px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  max-height: 0;
   opacity: 0;
-  overflow: hidden;
+  overflow: visible;
   visibility: hidden;
   pointer-events: none;
-  transform: translateX(42px);
+  transform: translateX(12px);
   transition:
-    max-height .32s ease,
     opacity .24s ease,
     transform .32s cubic-bezier(.2,.75,.25,1),
     visibility 0s linear .32s;
 }
 .timer-panel.is-open {
-  max-height: 130px;
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
   transform: translateX(0);
   transition:
-    max-height .32s ease,
     opacity .24s ease,
     transform .32s cubic-bezier(.2,.75,.25,1),
     visibility 0s;
@@ -1457,12 +1456,15 @@ const css = `
   font-size: 0.85rem;
 }
 
+/* القاعدة العامة (تصلحها وتمسح منها outline-offset) */
 .app button:focus-visible,
 .app input:focus-visible,
 .app select:focus-visible {
-  outline: 4px solid var(--accent);
-  outline-offset: 0px;
-  border-radius: var(--radius);
+}
+.timer-toggle:focus,
+.timer-toggle:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 .app .combo input:focus-visible { outline: none; }
 

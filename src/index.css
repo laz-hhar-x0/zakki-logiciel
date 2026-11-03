@@ -3,3 +3,18 @@ body {
   padding: 0;
   overflow-x: hidden;
 }
+
+.empty-seat {
+  font-size: 25px;
+  font-weight: 800;
+  color: #38bdf8;
+  text-align: center;
+  padding: 20px;
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+.seat-icon {
+  font-size: 32px;
+  color: #38bdf8;
+  margin-bottom: 8px;
+}
