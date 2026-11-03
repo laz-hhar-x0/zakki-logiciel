@@ -1645,15 +1645,17 @@ const css = `
     gap: 16px; 
   }
 
-  .box {
+   .box {
     width: 100%;            
     max-width: 100%;        
     min-width: 100%;
-    min-height: 480px;      
-    padding: 30px 16px 150px; /* التعديل اللي طلبتو */
-    justify-content: space-between; 
+    min-height: 520px;      /* 🔴 هنا السر: طول كبير بزاف باش ياخذ راحتو */
+    padding: 24px 16px 24px; /* 🔴 حينا الـ 150px، وخليا مسافات عادية */
+    justify-content: space-between; /* يوزع العنوان، الكرسي، والأزرار بالتساوي */
   }
-
+    .btns {
+    gap: 12px; /* يفرق الأزرار على بعضاهم */
+  }
   .box h2 { font-size: 3.2rem; } 
   .label { font-size: 1.1rem; }
   .big { font-size: 2.2rem; }    
