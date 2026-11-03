@@ -1642,28 +1642,26 @@ const css = `
   .nav { padding: 7px 10px; font-size: 0.75rem; }
   
   .grid { 
-    gap: 16px; /* زيادة الفراغ بين المربعات */
+    gap: 16px; 
   }
 
   .box {
     width: 100%;            
     max-width: 100%;        
     min-width: 100%;
-    min-height: 480px;      /* طول كبير باش يوسع */
-    padding: 30px 16px 150px; /* 40px في التحت باش الأزرار ما يلصقوش في الحافة */
-    justify-content: space-between; /* يوزع المسافات بين العنوان، الوسط، والأزرار */
+    min-height: 480px;      
+    padding: 30px 16px 150px; /* التعديل اللي طلبتو */
+    justify-content: space-between; 
   }
 
   .box h2 { font-size: 3.2rem; } 
   .label { font-size: 1.1rem; }
   .big { font-size: 2.2rem; }    
 
-  /* باش نضمنو المحتوى ما يخرجش لبرا */
   .combo, .btns, .two { 
     max-width: 100%; 
   }
 
-  /* خلي الأزرار تحت بعضاهم في الشاشات الصغيرة بزاف */
   .btns { 
     flex-direction: column; 
     gap: 8px;
@@ -1682,7 +1680,7 @@ const css = `
   .box {
     width: 100%;
     min-width: 100%;
-    min-height: 300px; /* طول مناسب */
+    min-height: 300px; 
     padding: 24px 14px 20px;
   }
   
