@@ -32,10 +32,12 @@ const hms = (sec) => {
   return `${h ? p(h) + ":" : ""}${p(m)}:${p(s)}`;
 };
 
-async function finishSession(id, d) {
+async function finishSession(id, d, realMin) {
   if (!d || d.status !== "running") return;
-  const end = d.endsAt ? Math.min(Date.now(), d.endsAt) : Date.now();
-  const exact = (end - d.startAt) / 60000;
+  const end = realMin
+    ? d.startAt + realMin * 60000
+    : d.endsAt ? Math.min(Date.now(), d.endsAt) : Date.now();
+  const exact = realMin ? realMin : (end - d.startAt) / 60000;
   const session = {
     station: id,
     mode: d.endsAt ? "timer" : "open",
@@ -55,10 +57,10 @@ async function finishSession(id, d) {
   await batch.commit();
 }
 
-const safeFinish = (id, d) =>
-  finishSession(id, d).catch((e) => alert("خطأ في الإنهاء: " + e.message));
+const safeFinish = (id, d, realMin) =>
+  finishSession(id, d, realMin).catch((e) => alert("خطأ في الإنهاء: " + e.message));
 
-function Station({ id, data, now }) {
+function Station({ id, data, now, onEndOpen }) {
   const [mins, setMins] = useState("");
   const [menu, setMenu] = useState(false);
   const running = data?.status === "running";
@@ -102,7 +104,6 @@ function Station({ id, data, now }) {
       <div className="mid">
         {running ? (
           <>
-            {/* هنا التعديل: إذا كانت مفتوحة كيكتب "وقت مفتوح" */}
             <div className="label">
               {isOpen ? "وقت مفتوح" : "المدة المتبقية"}
             </div>
@@ -150,7 +151,9 @@ function Station({ id, data, now }) {
             </>
           )}
           {running && (
-            <button className="b-end" onClick={() => safeFinish(id, data)}>إنهاء المؤقت</button>
+            <button className="b-end" onClick={() => (isOpen ? onEndOpen(id) : safeFinish(id, data))}>
+              إنهاء المؤقت
+            </button>
           )}
         </div>
       </div>
@@ -172,23 +175,30 @@ function History({ onStats }) {
   const [toDelete, setToDelete] = useState(null);
   const [expToDelete, setExpToDelete] = useState(null);
   const [showAddExp, setShowAddExp] = useState(false);
+  const [showAddSes, setShowAddSes] = useState(false);
+  const [err, setErr] = useState("");
   const isToday = day.getTime() >= startOfDay(new Date()).getTime();
 
   useEffect(() => {
     const start = day.getTime();
     const end = addDays(day, 1).getTime();
+    setList([]);
+    setErr("");
     return onSnapshot(
       query(collection(db, "sessions"), where("from", ">=", start), where("from", "<", end), orderBy("from", "desc")),
-      (s) => setList(s.docs.map((d) => ({ id: d.id, ...d.data() })))
+      (s) => setList(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (e) => { console.error(e); setErr("خطأ في جلب الجلسات: " + e.message); }
     );
   }, [day]);
 
   useEffect(() => {
     const start = day.getTime();
     const end = addDays(day, 1).getTime();
+    setExpenses([]);
     return onSnapshot(
       query(collection(db, "expenses"), where("at", ">=", start), where("at", "<", end), orderBy("at", "desc")),
-      (s) => setExpenses(s.docs.map((d) => ({ id: d.id, ...d.data() })))
+      (s) => setExpenses(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (e) => { console.error(e); setErr("خطأ في جلب المصاريف: " + e.message); }
     );
   }, [day]);
 
@@ -237,7 +247,12 @@ function History({ onStats }) {
         </div>
       </div>
 
-      <h3 className="section-title">جلسات البلاي</h3>
+      {err && <p className="muted" style={{ color: "var(--danger)" }}>{err}</p>}
+
+      <div className="section-head">
+        <h3 className="section-title" style={{ margin: 0 }}>جلسات البلاي</h3>
+        <button className="add-exp" onClick={() => setShowAddSes(true)}>+ جلسة</button>
+      </div>
       {list.length === 0 && <p className="muted">ما كانش لعب في هاد النهار.</p>}
       {list.map((s) => (
         <div key={s.id} className={`row ${s.paid ? "paid" : ""}`}>
@@ -297,8 +312,13 @@ function History({ onStats }) {
         </div>
       )}
 
+      {showAddSes && (
+        <AddSessionModal day={day} onClose={() => setShowAddSes(false)} />
+      )}
+
       {showAddExp && (
         <AddExpenseModal
+          day={day}
           onClose={() => setShowAddExp(false)}
           onSaved={() => setShowAddExp(false)}
         />
@@ -307,7 +327,94 @@ function History({ onStats }) {
   );
 }
 
-function AddExpenseModal({ onClose, onSaved }) {
+function AddSessionModal({ day, onClose }) {
+  const [station, setStation] = useState(STATIONS[0]);
+  const [date, setDate] = useState(inputValue(day));
+  const [time, setTime] = useState("20:00");
+  const [minutes, setMinutes] = useState("");
+  const [paid, setPaid] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const mins = parseInt(minutes, 10);
+  const price = mins >= 1 ? priceOf(mins) : 0;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!mins || mins < 1) return alert("اكتب عدد الدقائق");
+    if (!date || !time) return alert("اختار النهار والوقت");
+    const [y, m, d] = date.split("-").map(Number);
+    const [hh, mm] = time.split(":").map(Number);
+    const from = new Date(y, m - 1, d, hh, mm).getTime();
+
+    setSaving(true);
+    try {
+      await setDoc(doc(db, "sessions", `${station}_${from}`), {
+        station,
+        mode: "timer",
+        from,
+        to: from + mins * 60000,
+        minutes: mins,
+        price,
+        paid,
+      });
+      onClose();
+    } catch (err) {
+      alert("خطأ في الحفظ: " + err.message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <h3>جلسة جديدة</h3>
+        <p className="modal-sub">زيد جلسة نسيتها أو من نهار قديم</p>
+
+        <label className="field">
+          <span>المحطة</span>
+          <select value={station} onChange={(e) => setStation(e.target.value)}>
+            {STATIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+
+        <label className="field">
+          <span>النهار</span>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+
+        <label className="field">
+          <span>وقت البداية</span>
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </label>
+
+        <label className="field">
+          <span>المدة (دقيقة)</span>
+          <input
+            type="number" min="1" inputMode="numeric" autoFocus
+            value={minutes} onChange={(e) => setMinutes(e.target.value)}
+            placeholder="مثلاً 90"
+          />
+        </label>
+
+        <label className="check">
+          <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} />
+          <span>تم التحصيل</span>
+        </label>
+
+        <p className="modal-sub">السعر: <b style={{ color: "var(--text)" }}>{price} دج</b></p>
+
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>إلغاء</button>
+          <button type="submit" className="primary" disabled={saving}>
+            {saving ? "..." : "حفظ"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AddExpenseModal({ day, onClose, onSaved }) {
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState(EXPENSE_CATS[0]);
   const [customCat, setCustomCat] = useState("");
@@ -318,10 +425,16 @@ function AddExpenseModal({ onClose, onSaved }) {
     e.preventDefault();
     const a = parseInt(amount, 10);
     if (!a || a < 1) return alert("اكتب المبلغ");
-    
+
     if (cat === "__custom__" && !customCat.trim()) {
       return alert("اكتب نوع المصروف اللي حبيت");
     }
+
+    const todayStart = startOfDay(new Date()).getTime();
+    const atTime =
+      day && startOfDay(day).getTime() < todayStart
+        ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0).getTime()
+        : Date.now();
 
     setSaving(true);
     try {
@@ -329,7 +442,7 @@ function AddExpenseModal({ onClose, onSaved }) {
         amount: a,
         cat: cat === "__custom__" ? customCat.trim() : cat,
         note: note.trim(),
-        at: Date.now(),
+        at: atTime,
       });
       onSaved();
     } catch (err) {
@@ -346,7 +459,7 @@ function AddExpenseModal({ onClose, onSaved }) {
         onSubmit={submit}
       >
         <h3>مصروف جديد</h3>
-        <p className="modal-sub">سجّل مصروف اليوم</p>
+        <p className="modal-sub">{day ? `سجّل مصروف ${fmtDate(day)}` : "سجّل مصروف اليوم"}</p>
 
         <label className="field">
           <span>المبلغ (دج)</span>
@@ -425,17 +538,21 @@ function Stats({ onBack }) {
 
   useEffect(() => {
     const [a, b] = rangeOf(kind, ref);
+    setList([]);
     return onSnapshot(
       query(collection(db, "sessions"), where("from", ">=", a.getTime()), where("from", "<", b.getTime()), orderBy("from", "desc")),
-      (snap) => setList(snap.docs.map((d) => d.data()))
+      (snap) => setList(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (e) => console.error(e)
     );
   }, [kind, ref]);
 
   useEffect(() => {
     const [a, b] = rangeOf(kind, ref);
+    setExpList([]);
     return onSnapshot(
       query(collection(db, "expenses"), where("at", ">=", a.getTime()), where("at", "<", b.getTime()), orderBy("at", "desc")),
-      (snap) => setExpList(snap.docs.map((d) => d.data()))
+      (snap) => setExpList(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (e) => console.error(e)
     );
   }, [kind, ref]);
 
@@ -461,7 +578,7 @@ function Stats({ onBack }) {
     : kind === "month" ? `${MONTHS[start.getMonth()]} ${start.getFullYear()}`
     : `${start.getFullYear()}`;
 
-  const timeline = kind === "day" 
+  const timeline = kind === "day"
     ? [
         ...paidList.map(s => ({ type: "session", time: s.from, data: s })),
         ...expList.map(e => ({ type: "expense", time: e.at, data: e }))
@@ -546,6 +663,11 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const busy = useRef(new Set());
 
+  const [notice, setNotice] = useState(null);   // تنبيه الوقت المفتوح
+  const [endId, setEndId] = useState(null);     // المحطة اللي نهيوها
+  const [realMin, setRealMin] = useState("");
+  const noticed = useRef(false);
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
@@ -570,6 +692,25 @@ export default function App() {
     });
   }, [now, stations]);
 
+  // كي يتحل الموقع: شوف واش كاين وقت مفتوح
+  useEffect(() => {
+    if (noticed.current || Object.keys(stations).length === 0) return;
+    noticed.current = true;
+    const open = STATIONS.filter((id) => stations[id]?.status === "running" && !stations[id].endsAt);
+    if (open.length) setNotice(open);
+  }, [stations]);
+
+  const openEnd = (id) => {
+    setEndId(id);
+    setRealMin(String(Math.max(1, Math.round((Date.now() - stations[id].startAt) / 60000))));
+  };
+  const confirmEnd = async () => {
+    const m = parseInt(realMin, 10);
+    if (!m || m < 1) return alert("اكتب عدد الدقائق");
+    await safeFinish(endId, stations[endId], m);
+    setEndId(null);
+  };
+
   const openHistory = () => {
     if (authed) {
       setPage("history");
@@ -582,7 +723,7 @@ export default function App() {
 
   const submitPass = (e) => {
     e?.preventDefault();
-    if (passInput === "123") {
+    if (passInput === import.meta.env.VITE_APP_PASS) {
       setAuthed(true);
       setAskPass(false);
       setPage("history");
@@ -598,7 +739,7 @@ export default function App() {
   };
 
   return (
-    <div dir="rtl" className="app" style={{ backgroundImage: 'url("/backgronddd.jpg")' }}>
+    <div dir="rtl" className="app">
       <style>{css}</style>
 
       <div className="top">
@@ -615,13 +756,56 @@ export default function App() {
       {page === "home" ? (
         <div className="grid">
           {STATIONS.map((id) => (
-            <Station key={id} id={id} data={stations[id]} now={now} />
+            <Station key={id} id={id} data={stations[id]} now={now} onEndOpen={openEnd} />
           ))}
         </div>
       ) : page === "history" ? (
         <History onStats={() => setPage("stats")} />
       ) : (
         <Stats onBack={() => setPage("history")} />
+      )}
+
+      {notice && (
+        <div className="modal-backdrop" onClick={() => setNotice(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>⚠️ كاين وقت مفتوح</h3>
+            {notice.map((id) =>
+              stations[id]?.status === "running" && !stations[id].endsAt ? (
+                <p key={id} className="modal-sub">
+                  <b style={{ color: "var(--text)" }}>{id}</b> راه يحسب من{" "}
+                  <b style={{ color: "var(--text)" }}>{clock(stations[id].startAt)}</b> —{" "}
+                  <b style={{ color: "var(--accent)" }}>{hms((now - stations[id].startAt) / 1000)}</b>
+                </p>
+              ) : null
+            )}
+            <div className="modal-actions">
+              <button className="primary" onClick={() => setNotice(null)}>فهمت</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {endId && stations[endId] && (
+        <div className="modal-backdrop" onClick={() => setEndId(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>إنهاء {endId}</h3>
+            <p className="modal-sub">
+              المؤقت دار: <b style={{ color: "var(--text)" }}>{hms((now - stations[endId].startAt) / 1000)}</b>
+            </p>
+            <label className="field">
+              <span>شحال لعب حقيقة (دقيقة)</span>
+              <input type="number" min="1" inputMode="numeric" autoFocus
+                value={realMin} onChange={(e) => setRealMin(e.target.value)} />
+            </label>
+            <p className="modal-sub">
+              السعر: <b style={{ color: "var(--text)" }}>{parseInt(realMin, 10) >= 1 ? priceOf(parseInt(realMin, 10)) : 0} دج</b>
+            </p>
+            <div className="modal-actions">
+              <button onClick={() => setEndId(null)}>إلغاء</button>
+              <button className="danger" onClick={confirmEnd}>تأكيد الإنهاء</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {askPass && (
@@ -676,18 +860,36 @@ const css = `
 * { box-sizing: border-box; }
 
 .app {
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
   padding: 28px clamp(14px, 3vw, 40px);
-  background-color: var(--bg); 
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
+  background-color: var(--bg);
   color: var(--text);
   font-family: 'Cairo', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden; 
+  overflow-x: hidden;
+}
+
+/* الخلفية اللي كتدور */
+.app::before {
+  --orbit: 50px;               /* نصف قطر الدائرة */
+  content: "";
+  position: fixed;
+  inset: calc(var(--orbit) * -1.5);   /* زيادة باش ما تبانوش الحواف */
+  z-index: -1;
+  background: url("/1.webp") center / cover no-repeat;
+  animation: orbitBg 12s linear infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* الصورة كتبقى مستقيمة وكتزح فمسار دائري: يمين ← فوق ← يسار ← تحت */
+@keyframes orbitBg {
+  from { transform: rotate(0deg)   translateX(var(--orbit)) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(var(--orbit)) rotate(-360deg); }
 }
 
 /* ─────────── Top bar ─────────── */
@@ -704,7 +906,7 @@ const css = `
 .top h1 {
   margin: 0;
   text-align: center;
-  font-size: 2.8rem; 
+  font-size: 2.8rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -744,18 +946,18 @@ const css = `
   position: relative;
   overflow: visible;
   min-height: 340px;
-  
-  width: calc(33.333% - 16px); 
-  min-width: 280px; 
-  max-width: 350px; 
-  
+
+  width: calc(33.333% - 16px);
+  min-width: 280px;
+  max-width: 350px;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   padding: 48px 20px 22px;
-  
-  background: rgba(17, 19, 22, 0.75); 
+
+  background: rgba(17, 19, 22, 0.75);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 
@@ -766,6 +968,17 @@ const css = `
 .box.on   { border-color: var(--ok); }
 .box.open { border-color: var(--accent); }
 .box:hover { filter: brightness(1.04); }
+
+/* دوران 360° مرة وحدة كي يبدا المؤقت ولا فتح وقت */
+.box.on,
+.box.open {
+  animation: spinOnce 1.2s cubic-bezier(.4, 0, .2, 1);
+}
+  
+@keyframes spinOnce {
+  from { transform: perspective(900px) rotateY(0deg); }
+  to   { transform: perspective(900px) rotateY(360deg); }
+}
 
 .glyph {
   position: absolute;
@@ -784,33 +997,13 @@ const css = `
   position: relative;
   z-index: 1;
   margin: 0 0 6px;
-  font-size: 2.4rem;
+  font-size: 4.4rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-align: center;
   align-self: center;
   color: var(--text);
   line-height: 1.1;
-}
-.box h2::after {
-  content: "";
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  margin-inline-start: 12px;
-  border-radius: 50%;
-  background: var(--danger);
-  vertical-align: middle;
-  box-shadow: 0 0 0 4px rgba(239,83,80,0.14);
-  transition: background .15s, box-shadow .15s;
-}
-.box.on h2::after {
-  background: var(--ok);
-  box-shadow: 0 0 0 4px rgba(62,207,142,0.14);
-}
-.box.open h2::after {
-  background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(79,140,255,0.14);
 }
 
 /* ─────────── Middle timer area ─────────── */
@@ -829,7 +1022,7 @@ const css = `
 }
 
 .label {
-  font-size: 1.4rem; 
+  font-size: 1.4rem;
   font-weight: 700;
   color: var(--text);
   letter-spacing: 0.02em;
@@ -1068,7 +1261,7 @@ const css = `
   max-width: 1000px;
 }
 .sums div {
-  background: rgba(17, 19, 22, 0.85); 
+  background: rgba(17, 19, 22, 0.85);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border);
@@ -1131,7 +1324,7 @@ const css = `
   grid-template-columns: 64px minmax(120px, 1fr) 84px 76px 100px 64px;
   gap: 10px;
   align-items: center;
-  background: rgba(17, 19, 22, 0.85); 
+  background: rgba(17, 19, 22, 0.85);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border);
@@ -1186,7 +1379,7 @@ const css = `
 .app button:focus-visible,
 .app input:focus-visible,
 .app select:focus-visible {
-  outline: 4px solid var(--accent); 
+  outline: 4px solid var(--accent);
   outline-offset: 0px;
   border-radius: var(--radius);
 }
@@ -1270,6 +1463,20 @@ const css = `
 }
 .field input,
 .field select { text-align: right; }
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.modal .check input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: var(--ok);
+}
 .modal-actions {
   display: flex;
   gap: 8px;
@@ -1338,19 +1545,15 @@ const css = `
 
 /* الشاشات المتوسطة (تابليت) */
 @media (max-width: 1024px) {
-  .app {
-    background-image: url('/red.avif') !important; 
-  }
   .top h1 { font-size: 2rem; }
   .label { font-size: 1.2rem; }
 }
 
 /* الشاشات الصغيرة (موبايل) */
 @media (max-width: 760px) {
-  .app { 
-    padding: 14px; 
-    font-size: 13px; 
-    background-image: url('/green.png') !important; 
+  .app {
+    padding: 14px;
+    font-size: 13px;
   }
   .top {
     grid-template-columns: 84px 1fr 0;
@@ -1361,14 +1564,13 @@ const css = `
   .top h1 { font-size: 1.5rem; }
   .nav { padding: 7px 10px; font-size: 0.75rem; }
   .grid { gap: 10px; }
-  .box { 
-    width: calc(50% - 10px); 
+  .box {
+    width: calc(50% - 10px);
     min-width: 200px;
-    min-height: 320px; 
-    padding: 42px 16px 18px; 
+    min-height: 320px;
+    padding: 42px 16px 18px;
   }
-  .box h2 { font-size: 2rem; }
-  .box h2::after { width: 13px; height: 13px; margin-inline-start: 10px; }
+  .box h2 { font-size: 3.4rem; }
   .label { font-size: 1.1rem; }
   .combo, .btns, .two { max-width: 100%; }
   .row { grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; }
@@ -1381,12 +1583,45 @@ const css = `
   .top > span { display: none; }
   .btns { flex-direction: column; }
   .big { font-size: 2rem; }
-  .box { 
-    width: 100%; 
+  .box {
+    width: 100%;
     min-width: 100%;
   }
-  .box h2 { font-size: 1.75rem; }
+  .box h2 { font-size: 3rem; }
   .label { font-size: 1rem; }
+}
+
+/* ─────────── الشاشات الكبيرة ─────────── */
+@media (min-width: 1500px) {
+  .top, .grid { max-width: 1800px; }
+  .box {
+    width: calc(33.333% - 16px);
+    max-width: 400px;          /* كانت 460px */
+    min-height: 300px;         /* كانت 420px */
+    padding: 36px 22px 24px;   /* كانت 56px 28px 28px */
+  }
+  .box h2 { font-size: 4.4rem; }   /* كانت 5.2rem */
+  .label { font-size: 1.5rem; }    /* كانت 1.7rem */
+  .big { font-size: 2.9rem; }      /* كانت 3.4rem */
+  .price { font-size: 2.3rem; }    /* كانت 2.6rem */
+  .combo, .btns, .two { max-width: 310px; }   /* كانت 340px */
+  .btns button, .two button { font-size: 0.9rem; padding: 11px 10px; }
+}
+
+@media (min-width: 1900px) {
+  .top, .grid { max-width: 2200px; }
+  .box {
+    max-width: 480px;          /* كانت 580px */
+    min-height: 340px;         /* كانت 520px */
+    padding: 40px 28px 28px;   /* كانت 64px 36px 36px */
+  }
+  .box h2 { font-size: 5rem; }     /* كانت 6.4rem */
+  .label { font-size: 1.7rem; }    /* كانت 2rem */
+  .big { font-size: 3.4rem; }      /* كانت 4.2rem */
+  .price { font-size: 2.7rem; }    /* كانت 3.2rem */
+  .combo, .btns, .two { max-width: 360px; }   /* كانت 420px */
+  .btns button, .two button { font-size: 0.95rem; padding: 12px 10px; }
+  .combo input { font-size: 0.95rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
